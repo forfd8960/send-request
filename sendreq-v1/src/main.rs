@@ -12,7 +12,7 @@ struct Response {
 struct Request {
     method: String,
     url: String,
-    headers: HashMap<&'static str, String>,
+    headers: HashMap<&'static str, &'static str>,
     body: String,
 }
 
@@ -33,54 +33,30 @@ impl Request {
         let url = self.url.clone();
         let body = self.body.clone();
 
+        let send_with_body = |builder: reqwest::blocking::RequestBuilder| {
+            let resp = builder.headers(hdrs).body(body).send();
+            println!("resp: {:?}", resp);
+        };
+
         match self.method.as_str() {
             GET => {
-                let mut builder = client.get(url);
-                if self.headers.len() > 0 {
-                    builder = builder.headers(hdrs);
-                }
-                if self.body.len() > 0 {
-                    builder = builder.body(body);
-                }
-                let resp = builder.send();
-                println!("resp: {:?}", resp);
+                let builder = client.get(url);
+                send_with_body(builder);
                 return Ok(());
             }
             PUT => {
-                let mut builder = client.put(url);
-                if self.headers.len() > 0 {
-                    builder = builder.headers(hdrs);
-                }
-                if self.body.len() > 0 {
-                    builder = builder.body(body);
-                }
-                let resp = builder.send();
-                println!("resp: {:?}", resp);
+                let builder = client.put(url);
+                send_with_body(builder);
                 return Ok(());
             }
             DELETE => {
-                let mut builder = client.delete(url);
-                if self.headers.len() > 0 {
-                    builder = builder.headers(hdrs);
-                }
-                if self.body.len() > 0 {
-                    builder = builder.body(body);
-                }
-                let resp = builder.send();
-                println!("resp: {:?}", resp);
+                let builder = client.delete(url);
+                send_with_body(builder);
                 return Ok(());
             }
             POST => {
-                let mut builder = client.post(url);
-                if self.headers.len() > 0 {
-                    builder = builder.headers(hdrs);
-                }
-                if self.body.len() > 0 {
-                    builder = builder.body(body);
-                }
-
-                let resp = builder.send();
-                println!("resp: {:?}", resp);
+                let builder = client.post(url);
+                send_with_body(builder);
                 return Ok(());
             }
             _ => {
@@ -195,8 +171,10 @@ fn parse_method_url(content: &Vec<&str>) -> Result<(String, String), &'static st
     }
 }
 
-fn parse_headers(content: &[&str]) -> Result<HashMap<&'static str, String>, &'static str> {
-    let mut res: HashMap<&'static str, String> = HashMap::new();
+fn parse_headers<'a>(
+    content: &[&'a str],
+) -> Result<HashMap<&'static str, &'static str>, &'static str> {
+    let mut res: HashMap<&'static str, &'static str> = HashMap::new();
     for kv in content {
         if kv.len() == 0 {
             break;
@@ -207,10 +185,7 @@ fn parse_headers(content: &[&str]) -> Result<HashMap<&'static str, String>, &'st
             return Err("invlid header");
         }
 
-        res.insert(
-            kv_tmp.get(0).unwrap().trim(),
-            kv_tmp.get(1).unwrap().trim().to_string(),
-        );
+        res.insert(kv_tmp.get(0).unwrap().trim(), kv_tmp.get(1).unwrap().trim());
     }
 
     Ok(res)
