@@ -1,3 +1,5 @@
+use reqwest;
+use reqwest::blocking::Client;
 use std::{collections::HashMap, env, fs, process};
 
 struct Response {
@@ -10,7 +12,7 @@ struct Response {
 struct Request {
     method: String,
     url: String,
-    headers: HashMap<String, String>,
+    headers: HashMap<&'static str, String>,
     body: String,
 }
 
@@ -20,17 +22,71 @@ const POST: &str = "POST";
 const DELETE: &str = "DELETE";
 
 impl Request {
-    fn send(&self) -> Result<Response, &'static str> {
+    fn send(&self) -> Result<(), &'static str> {
+        let client = Client::new();
+
+        let mut hdrs = reqwest::header::HeaderMap::new();
+        for (key, val) in self.headers.iter() {
+            hdrs.insert(&key[..], val.parse().unwrap());
+        }
+
+        let url = self.url.clone();
+        let body = self.body.clone();
+
         match self.method.as_str() {
-            GET => {}
-            PUT => {}
-            DELETE => {}
-            POST => {}
+            GET => {
+                let mut builder = client.get(url);
+                if self.headers.len() > 0 {
+                    builder = builder.headers(hdrs);
+                }
+                if self.body.len() > 0 {
+                    builder = builder.body(body);
+                }
+                let resp = builder.send();
+                println!("resp: {:?}", resp);
+                return Ok(());
+            }
+            PUT => {
+                let mut builder = client.put(url);
+                if self.headers.len() > 0 {
+                    builder = builder.headers(hdrs);
+                }
+                if self.body.len() > 0 {
+                    builder = builder.body(body);
+                }
+                let resp = builder.send();
+                println!("resp: {:?}", resp);
+                return Ok(());
+            }
+            DELETE => {
+                let mut builder = client.delete(url);
+                if self.headers.len() > 0 {
+                    builder = builder.headers(hdrs);
+                }
+                if self.body.len() > 0 {
+                    builder = builder.body(body);
+                }
+                let resp = builder.send();
+                println!("resp: {:?}", resp);
+                return Ok(());
+            }
+            POST => {
+                let mut builder = client.post(url);
+                if self.headers.len() > 0 {
+                    builder = builder.headers(hdrs);
+                }
+                if self.body.len() > 0 {
+                    builder = builder.body(body);
+                }
+
+                let resp = builder.send();
+                println!("resp: {:?}", resp);
+                return Ok(());
+            }
             _ => {
                 return Err("invalid request method");
             }
         }
-        Ok(Response::new(200, HashMap::new(), "".to_string()))
     }
 }
 
@@ -57,6 +113,7 @@ fn main() {
     match request_result {
         Ok(req) => {
             let resp = req.send();
+            println!("send request result: {:?}", resp);
         }
         Err(e) => {
             println!("parse request file error: {}", e);
@@ -87,13 +144,13 @@ fn parse_request_file(req_file: &str) -> Result<Request, &'static str> {
     }
 
     let method_url = parse_method_url(&content);
-    let mut method = "".to_string().trim();
-    let mut url = "".to_string().trim();
+    let mut method: String = "".to_string();
+    let mut url: String = "".to_string();
     match method_url {
         Err(e) => return Err(e),
         Ok(v) => {
-            method = &v.0;
-            url = &v.1;
+            method = v.0.trim().to_string();
+            url = v.1.trim().to_string();
         }
     }
 
@@ -111,8 +168,8 @@ fn parse_request_file(req_file: &str) -> Result<Request, &'static str> {
     }
 
     Ok(Request {
-        method: method.to_string(),
-        url: url.to_string(),
+        method: method,
+        url: url,
         headers: hrds,
         body: body.to_string(),
     })
@@ -138,8 +195,8 @@ fn parse_method_url(content: &Vec<&str>) -> Result<(String, String), &'static st
     }
 }
 
-fn parse_headers(content: &[&str]) -> Result<HashMap<String, String>, &'static str> {
-    let mut res: HashMap<String, String> = HashMap::new();
+fn parse_headers(content: &[&str]) -> Result<HashMap<&'static str, String>, &'static str> {
+    let mut res: HashMap<&'static str, String> = HashMap::new();
     for kv in content {
         if kv.len() == 0 {
             break;
@@ -151,7 +208,7 @@ fn parse_headers(content: &[&str]) -> Result<HashMap<String, String>, &'static s
         }
 
         res.insert(
-            kv_tmp.get(0).unwrap().trim().to_string(),
+            kv_tmp.get(0).unwrap().trim(),
             kv_tmp.get(1).unwrap().trim().to_string(),
         );
     }
