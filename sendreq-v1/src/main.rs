@@ -117,7 +117,8 @@ impl<'c, 's> Request<'c, 's> {
 
         let headers = self.headers.clone();
         for (key, val) in headers.iter() {
-            // hdrs.insert(&key[..], val.parse().unwrap());
+            let hdr: &'static str = Box::leak(key.to_string().into_boxed_str());
+            hdrs.insert(hdr, val.parse().unwrap());
         }
 
         let url = self.url.clone();
