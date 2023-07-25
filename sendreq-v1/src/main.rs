@@ -2,20 +2,17 @@ use reqwest;
 use reqwest::blocking::Client;
 use std::{collections::HashMap, env, fs, process};
 
-struct Response {
-    code: i32,
-    headers: HashMap<String, String>,
-    body: String,
-}
+#[derive(Debug)]
+struct Content<'s>(&'s [&'s str]);
 
-#[derive(Clone)]
-struct Request<'a> {
-    method: &'a str,
-    url: &'a str,
-    headers: HashMap<&'a str, &'a str>,
-    body: &'a str,
-    req_data: String,
-    content: &'a [&'a str],
+#[derive(Debug)]
+// s is longer than c
+struct Request<'c, 's: 'c> {
+    method: &'s str,
+    url: &'s str,
+    headers: HashMap<&'s str, &'s str>,
+    body: &'s [&'s str],
+    content: &'c Content<'s>,
 }
 
 const GET: &str = "GET";
@@ -23,15 +20,14 @@ const PUT: &str = "PUT";
 const POST: &str = "POST";
 const DELETE: &str = "DELETE";
 
-impl<'a> Request<'a> {
-    fn new() -> Self {
+impl<'c, 's> Request<'c, 's> {
+    fn new(content: &'c Content<'s>) -> Self {
         Self {
             method: "",
             url: "",
             headers: HashMap::new(),
-            body: "",
-            req_data: "".to_string(),
-            content: &[],
+            body: &[],
+            content: content,
         }
     }
     /*
@@ -44,8 +40,7 @@ impl<'a> Request<'a> {
 
     {body}
     */
-    fn from_file(&mut self, file: String) -> Result<Self, &'a str> {
-        self.read_file_content(file);
+    fn from_content(&mut self) -> Result<&Self, &'c str> {
         let method_url = self.parse_method_and_url();
         match method_url {
             Err(e) => return Err(e),
@@ -67,19 +62,8 @@ impl<'a> Request<'a> {
         Ok(self)
     }
 
-    fn read_file_content(&mut self, file: String) {
-        self.req_data = fs::read_to_string(file).expect("not able to read the file");
-        let parts = self.req_data.split("\n");
-        let content: Vec<&str> = parts.collect();
-        if content.len() < 5 {
-            println!("invalid request data: {:?}", content);
-            process::exit(1);
-        }
-        self.content = &content[..];
-    }
-
-    fn parse_method_and_url(&self) -> Result<(String, String), &'a str> {
-        let method_url = self.content.get(0);
+    fn parse_method_and_url(&self) -> Result<(&'s str, &'s str), &'c str> {
+        let method_url = self.content.0.get(0);
 
         match method_url {
             None => {
@@ -93,14 +77,14 @@ impl<'a> Request<'a> {
 
                 let method = tmp.get(0).unwrap();
                 let url = tmp.get(1).unwrap();
-                Ok((method.trim().to_string(), url.trim().to_string()))
+                Ok((method.trim(), url.trim()))
             }
         }
     }
 
-    fn parse_headers(&self) -> Result<HashMap<&'a str, &'a str>, &'a str> {
-        let mut res: HashMap<&'a str, &'a str> = HashMap::new();
-        for kv in self.content {
+    fn parse_headers(&mut self) -> Result<HashMap<&'s str, &'s str>, &'c str> {
+        let mut res: HashMap<&'s str, &'s str> = HashMap::new();
+        for kv in self.content.0.iter() {
             if kv.len() == 0 {
                 break;
             }
@@ -116,26 +100,28 @@ impl<'a> Request<'a> {
         Ok(res)
     }
 
-    fn parse_body(&self) {
-        if 2 + self.headers.len() >= self.content.len() {
-            self.body = "";
+    fn parse_body(&mut self) {
+        let length = 2 + self.headers.len();
+        if length >= self.content.0.len() {
+            self.body = &[];
             return;
         }
 
-        let body_content = &self.content[2 + self.headers.len()..];
-        self.body = body_content.join("").trim();
+        self.body = &self.content.0[length..];
     }
 
-    fn send(&self) -> Result<(), &'a str> {
+    fn send(&self) -> Result<(), &'c str> {
         let client = Client::new();
 
         let mut hdrs = reqwest::header::HeaderMap::new();
-        for (key, val) in self.headers.iter() {
-            hdrs.insert(&key[..], val.parse().unwrap());
+
+        let headers = self.headers.clone();
+        for (key, val) in headers.iter() {
+            // hdrs.insert(&key[..], val.parse().unwrap());
         }
 
         let url = self.url.clone();
-        let body = self.body.clone();
+        let body = self.body.clone().to_owned().join("");
 
         let send_with_body = |builder: reqwest::blocking::RequestBuilder| {
             let resp = builder.headers(hdrs).body(body).send();
@@ -170,34 +156,41 @@ impl<'a> Request<'a> {
     }
 }
 
-impl Response {
-    fn new(code: i32, headers: HashMap<String, String>, body: String) -> Self {
-        Self {
-            code: code,
-            headers: headers,
-            body: body,
-        }
-    }
-}
-
-fn main() {
+fn main() -> Result<(), &'static str> {
     let args: Vec<String> = env::args().collect();
     if args.len() == 0 {
         println!("bad arguments");
         process::exit(1);
     }
 
-    let file = args.get(0).unwrap();
-    let mut request = Request::new();
-    let req = request.from_file(*file);
+    let req_file = args.get(0).unwrap();
+    let data = read_file_content(req_file.as_str())?;
+
+    let parts = data.split("\n");
+    let content: Vec<&str> = parts.collect();
+    let c = Content(&content[..]);
+
+    let mut request = Request::new(&c);
+    let req = request.from_content();
     match req {
         Err(e) => {
-            println!("{}", e);
+            println!("build request err: {}", e);
             process::exit(1);
         }
         Ok(v) => {
-            let resp = req.unwrap().send();
+            let resp = v.send();
             println!("send request result: {:?}", resp);
+            Ok(())
         }
+    }
+}
+
+fn read_file_content(file: &str) -> Result<String, &'static str> {
+    match fs::read_to_string(file) {
+        Err(e) => {
+            println!("file err: {}", e);
+            return Err("unabled to open file");
+        }
+        Ok(v) => return Ok(v),
     }
 }
