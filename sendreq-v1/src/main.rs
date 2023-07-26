@@ -41,6 +41,10 @@ impl<'c, 's> Request<'c, 's> {
     {body}
     */
     fn from_content(&mut self) -> Result<&Self, &'c str> {
+        if self.content.0.len() < 1 {
+            return Err("invalid request content");
+        }
+
         let method_url = self.parse_method_and_url();
         match method_url {
             Err(e) => return Err(e),
@@ -84,13 +88,20 @@ impl<'c, 's> Request<'c, 's> {
 
     fn parse_headers(&mut self) -> Result<HashMap<&'s str, &'s str>, &'c str> {
         let mut res: HashMap<&'s str, &'s str> = HashMap::new();
-        for kv in self.content.0.iter() {
+        // no headers
+        if self.content.0.len() <= 2 {
+            return Ok(res);
+        }
+
+        let header_content = &self.content.0[2..];
+        for kv in header_content.iter() {
             if kv.len() == 0 {
                 break;
             }
 
             let kv_tmp: Vec<&str> = kv.split(":").collect();
             if kv_tmp.len() != 2 {
+                println!("invalid header: {:?}", kv_tmp);
                 return Err("invlid header");
             }
 
