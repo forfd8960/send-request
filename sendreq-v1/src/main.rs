@@ -49,8 +49,8 @@ impl<'c, 's> Request<'c, 's> {
         match method_url {
             Err(e) => return Err(e),
             Ok(v) => {
-                self.method = &v.0.clone();
-                self.url = &v.1.clone();
+                self.method = &v.0;
+                self.url = &v.1;
             }
         }
 
@@ -132,8 +132,8 @@ impl<'c, 's> Request<'c, 's> {
             hdrs.insert(hdr, val.parse().unwrap());
         }
 
-        let url = self.url.clone();
-        let body = self.body.clone().to_owned().join("");
+        let url = self.url;
+        let body = self.body.to_owned().join("");
 
         let send_with_body = |builder: reqwest::blocking::RequestBuilder| {
             let resp = builder.headers(hdrs).body(body).send();
@@ -170,13 +170,17 @@ impl<'c, 's> Request<'c, 's> {
 
 fn main() -> Result<(), &'static str> {
     let args: Vec<String> = env::args().collect();
-    if args.len() == 0 {
+    if args.len() <= 1 {
         println!("bad arguments");
         process::exit(1);
     }
 
-    let req_file = args.get(0).unwrap();
+    println!("args: {:?}", args);
+
+    let req_file = args.get(1).unwrap();
+    println!("reading request from: {:?}", req_file);
     let data = read_file_content(req_file.as_str())?;
+    println!("data: {data:?}");
 
     let parts = data.split("\n");
     let content: Vec<&str> = parts.collect();
