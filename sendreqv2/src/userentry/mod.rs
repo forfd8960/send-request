@@ -2,20 +2,17 @@ use crate::requestsender::Request;
 use egui::{self, Ui};
 
 pub struct Entry<'a> {
-    left: &'a LeftSide<'a>,
+    left: &'a LeftSide,
 }
 
-pub struct LeftSide<'a> {
-    topbar: &'a TopBar<'a>,
-    collections: &'a Collections<'a>,
+pub struct LeftSide {
+    topbar: TopBar,
+    collections: Collections,
 }
 
-pub struct TopBar<'a> {
-    ui: &'a mut Ui,
-}
+pub struct TopBar {}
 
-pub struct Collections<'a> {
-    ui: &'a mut Ui,
+pub struct Collections {
     collections: Vec<Collection>,
 }
 
@@ -25,21 +22,39 @@ pub struct Collection {
     requests: Vec<Request>,
 }
 
-impl<'a> TopBar<'a> {
-    pub fn new(ui: &'a mut Ui) -> Self {
-        Self { ui: ui }
-    }
-
-    pub fn add_new_button(&mut self) {
-        if self.ui.button("New").clicked() {
-            // show a new tab in the right side
-            println!("should show a new tab in the right side");
+impl LeftSide {
+    pub fn new() -> Self {
+        Self {
+            topbar: TopBar::new(),
+            collections: Collections::new(),
         }
     }
-    pub fn add_import_button(&mut self) {
-        if self.ui.button("Import").clicked() {
-            // show import dialog
-            println!("should show a import dialog");
+}
+
+impl TopBar {
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    pub fn display(&mut self) -> Box<dyn Fn(&mut Ui)> {
+        Box::new(|ui: &mut Ui| {
+            if ui.button("New").clicked() {
+                // show a new tab in the right side
+                println!("should show a new tab in the right side");
+            }
+
+            if ui.button("Import").clicked() {
+                // show import dialog
+                println!("should show a import dialog");
+            }
+        })
+    }
+}
+
+impl Collections {
+    pub fn new() -> Self {
+        Self {
+            collections: vec![],
         }
     }
 }
